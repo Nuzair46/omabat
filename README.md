@@ -18,7 +18,7 @@ Omabat is a lightweight Linux battery-history daemon and terminal dashboard. Use
 - Battery health, designed capacity, current full capacity, and vendor details
 - Immediate live updates while the dashboard is open
 - Optional background systemd user service
-- Optional Waybar daemon-status indicator
+- Optional Waybar tray battery indicator
 - Local SQLite storage with no account or network service
 
 ## Install
@@ -47,7 +47,7 @@ omabat install
 
 This installs and starts `~/.config/systemd/user/omabat.service`. The daemon samples every 120 seconds and records readings immediately before suspend and after resume.
 
-If Waybar is configured, `omabat install` also adds a Nerd Font daemon-status indicator. Clicking the indicator opens Omabat. The existing Waybar configuration is backed up before modification.
+If Waybar has an expandable tray group, `omabat install` adds a dynamic Nerd Font battery icon inside it. Clicking the icon opens Omabat. The existing Waybar configuration is backed up before modification.
 
 No root privileges are required.
 

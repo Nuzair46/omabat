@@ -76,12 +76,35 @@ func TestFormatWaybarShowsDaemonAndLatestSample(t *testing.T) {
 		Timestamp: time.Date(2026, 6, 13, 10, 20, 30, 0, time.UTC),
 		State:     "charging", Percentage: battery.Float(80), EnergyRate: battery.Float(42), ACOnline: battery.Bool(true),
 	})
-	if out.Class != "active" || out.Text != "󰒋" {
+	if out.Class != "active" || out.Text != "󰂊" {
 		t.Fatalf("unexpected waybar state: %+v", out)
 	}
 	for _, want := range []string{"Omabat daemon: active", "Battery: 80.0% charging", "Energy rate: 42.00 W", "Last sample: Jun 13 10:20:30"} {
 		if !strings.Contains(out.Tooltip, want) {
 			t.Fatalf("expected %q in tooltip: %s", want, out.Tooltip)
 		}
+	}
+}
+
+func TestWaybarBatteryIconReflectsStateAndLevel(t *testing.T) {
+	tests := []struct {
+		state      string
+		percentage float64
+		want       string
+	}{
+		{state: "discharging", percentage: 5, want: "󰂎"},
+		{state: "discharging", percentage: 75, want: "󰂀"},
+		{state: "charging", percentage: 75, want: "󰢞"},
+		{state: "charging", percentage: 100, want: "󰂅"},
+		{state: "full", percentage: 100, want: "󰁹"},
+	}
+	for _, test := range tests {
+		s := battery.Snapshot{State: test.state, Percentage: battery.Float(test.percentage)}
+		if got := waybarBatteryIcon(s); got != test.want {
+			t.Fatalf("waybarBatteryIcon(%s, %.0f) = %q, want %q", test.state, test.percentage, got, test.want)
+		}
+	}
+	if got := waybarBatteryIcon(battery.Snapshot{}); got != "󰂑" {
+		t.Fatalf("missing battery data icon = %q, want unknown battery icon", got)
 	}
 }

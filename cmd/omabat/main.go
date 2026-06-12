@@ -253,10 +253,8 @@ func waybar() error {
 
 func formatWaybar(active bool, s battery.Snapshot) waybarOutput {
 	status := "inactive"
-	icon := "󰒍"
 	if active {
 		status = "active"
-		icon = "󰒋"
 	}
 	lines := []string{"Omabat daemon: " + status}
 	if s.Percentage.Valid {
@@ -269,7 +267,22 @@ func formatWaybar(active bool, s battery.Snapshot) waybarOutput {
 		lines = append(lines, "Last sample: "+s.Timestamp.Format("Jan 02 15:04:05"))
 	}
 	lines = append(lines, "", "Click to open Omabat")
-	return waybarOutput{Text: icon, Tooltip: strings.Join(lines, "\n"), Class: status}
+	return waybarOutput{Text: waybarBatteryIcon(s), Tooltip: strings.Join(lines, "\n"), Class: status}
+}
+
+func waybarBatteryIcon(s battery.Snapshot) string {
+	if !s.Percentage.Valid {
+		return "󰂑"
+	}
+	level := int(s.Percentage.Float64 / 10)
+	level = min(max(level, 0), 10)
+	if s.State == "charging" {
+		return []string{"󰢟", "󰢜", "󰂆", "󰂇", "󰂈", "󰢝", "󰂉", "󰢞", "󰂊", "󰂋", "󰂅"}[level]
+	}
+	if s.State == "full" {
+		return "󰁹"
+	}
+	return []string{"󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"}[level]
 }
 
 func capacityValue(energy, charge sql.NullFloat64) string {
