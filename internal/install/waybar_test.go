@@ -29,6 +29,9 @@ func TestAddWaybarModuleIsIdempotent(t *testing.T) {
 	if waybarArrayHasModule(got, "modules-right", "custom/omabat") {
 		t.Fatalf("module added outside tray:\n%s", got)
 	}
+	if !strings.Contains(got, `"format": " {text}"`) {
+		t.Fatalf("module has no leading tray spacing:\n%s", got)
+	}
 	_, trayEnd, _ := trayModulesArray(got)
 	tray := got[trayStart:trayEnd]
 	if strings.Index(tray, `"custom/omabat"`) < strings.Index(tray, `"tray"`) {
@@ -62,6 +65,25 @@ func TestAddWaybarModuleMovesExistingModuleIntoTray(t *testing.T) {
 	}
 	if waybarArrayHasModule(got, "modules-right", "custom/omabat") {
 		t.Fatalf("module left outside tray:\n%s", got)
+	}
+	if !strings.Contains(got, `"format": " {text}"`) {
+		t.Fatalf("existing module was not given tray spacing:\n%s", got)
+	}
+}
+
+func TestAddWaybarModulePreservesCustomFormat(t *testing.T) {
+	config := `{
+  "modules-right": ["group/tray-expander"],
+  "group/tray-expander": {"modules": ["custom/expand-icon", "tray", "custom/omabat"]},
+  "custom/omabat": {"format": "[{text}]"},
+  "battery": {}
+}`
+	got, changed, err := addWaybarModule(config, "/bin/omabat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed || got != config {
+		t.Fatalf("custom format was changed:\n%s", got)
 	}
 }
 

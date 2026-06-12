@@ -80,6 +80,7 @@ func addWaybarModule(config, executable string) (string, bool, error) {
 		command := shellQuote(executable)
 		module := fmt.Sprintf(`  "custom/omabat": {
     "exec": %s,
+    "format": " {text}",
     "return-type": "json",
     "interval": 5,
     "tooltip": true,
@@ -89,7 +90,26 @@ func addWaybarModule(config, executable string) (string, bool, error) {
 		config = config[:index] + module + config[index:]
 		changed = true
 	}
+
+	var formatChanged bool
+	config, formatChanged, err := ensureWaybarObjectString(config, "custom/omabat", "format", " {text}")
+	if err != nil {
+		return "", false, err
+	}
+	changed = changed || formatChanged
 	return config, changed, nil
+}
+
+func ensureWaybarObjectString(config, object, key, value string) (string, bool, error) {
+	start, end, ok := waybarObject(config, object)
+	if !ok {
+		return "", false, fmt.Errorf("waybar config has no %s object", object)
+	}
+	if strings.Contains(config[start:end], strconv.Quote(key)) {
+		return config, false, nil
+	}
+	insertion := "\n    " + strconv.Quote(key) + ": " + strconv.Quote(value) + ","
+	return config[:start+1] + insertion + config[start+1:], true, nil
 }
 
 func waybarArrayHasModule(config, arrayName, module string) bool {
