@@ -2,7 +2,9 @@
 /omabat
 /dist/
 /coverage.out
-omabat
+/coverage.html
+*.test
+*.prof
 
 # Local databases
 *.db
@@ -15,4 +17,7 @@ omabat
 .agents/
 .codex/
 *.swp
+*.swo
+*~
 .DS_Store
+Thumbs.db
