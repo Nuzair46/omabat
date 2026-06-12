@@ -1,0 +1,18 @@
+# Build output
+/omabat
+/dist/
+/coverage.out
+omabat
+
+# Local databases
+*.db
+*.db-shm
+*.db-wal
+
+# Editor and OS files
+.idea/
+.vscode/
+.agents/
+.codex/
+*.swp
+.DS_Store
