@@ -23,20 +23,15 @@ Omabat is a lightweight Linux battery-history daemon and terminal dashboard. Use
 
 ## Install
 
-Download the archive for your architecture from [GitHub Releases](https://github.com/nuzair46/omabat/releases/latest), then install the binary:
+Install the latest release and start the background collector with one command:
 
 ```sh
-VERSION=0.1.0
-ARCH=amd64
-tar -xzf "omabat_${VERSION}_linux_${ARCH}.tar.gz"
-install -Dm755 "omabat_${VERSION}_linux_${ARCH}/omabat" ~/.local/bin/omabat
+curl -fsSL https://raw.githubusercontent.com/nuzair46/omabat/main/install.sh | sh
 ```
 
-Use `ARCH=arm64` on ARM systems. Ensure `~/.local/bin` is in your `PATH`, then launch Omabat:
+The installer detects AMD64 or ARM64, verifies the release checksum, installs Omabat to `~/.local/bin/omabat`, and runs `omabat install` for the current user. No root privileges are required.
 
-```sh
-omabat
-```
+Review [`install.sh`](install.sh) before running it, or download an archive manually from [GitHub Releases](https://github.com/nuzair46/omabat/releases/latest).
 
 Omabat requires Linux with `/sys/class/power_supply`. For the intended icon rendering, use a terminal configured with a [Nerd Font](https://www.nerdfonts.com/).
 

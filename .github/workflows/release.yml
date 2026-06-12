@@ -68,7 +68,7 @@ jobs:
               -trimpath \
               -ldflags="-s -w -X main.version=$TAG" \
               -o "dist/$name/omabat" ./cmd/omabat
-            cp README.md LICENSE "dist/$name/"
+            cp README.md LICENSE install.sh "dist/$name/"
             mkdir -p "dist/$name/assets"
             cp assets/demo.png "dist/$name/assets/"
             tar -C dist -czf "dist/$name.tar.gz" "$name"
