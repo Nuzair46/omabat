@@ -90,6 +90,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.Width, m.Height = msg.Width, msg.Height
 		m.Scroll = min(m.Scroll, m.maxScroll())
+		// Foot can reflow the previous frame while Hyprland tiles the window.
+		// Bubble Tea only tracks its old logical line count, so a repaint alone
+		// leaves wrapped rows below the new frame. Clear them on every resize.
+		return m, tea.ClearScreen
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, quitKeys):

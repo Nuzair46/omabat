@@ -311,5 +311,5 @@ func usage() {
   omabat waybar               Print Waybar daemon status JSON
   omabat version              Print the Omabat version
   omabat demo-data            Create a realistic demo history database
-  omabat install              Install and enable the user service`)
+  omabat install              Install the user service and desktop integration`)
 }

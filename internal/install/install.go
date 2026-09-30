@@ -40,15 +40,24 @@ WantedBy=default.target
 			return fmt.Errorf("systemctl %v: %w", args, err)
 		}
 	}
-	if changed, err := Waybar(executable); err != nil {
-		fmt.Fprintf(os.Stderr, "Waybar integration unavailable: %v\n", err)
-	} else if changed {
-		if err := RestartWaybar(); err != nil {
-			fmt.Fprintf(os.Stderr, "Waybar restart failed: %v\n", err)
-		}
+	if err := Desktop(executable); err != nil {
+		fmt.Fprintf(os.Stderr, "Desktop integration unavailable: %v\n", err)
 	}
 	fmt.Printf("Installed and started %s\n", path)
 	return nil
+}
+
+// Desktop prefers Omarchy's shell, including when an old Waybar config remains
+// after an Omarchy upgrade. Bar integration is optional for the collector.
+func Desktop(executable string) error {
+	if handled, err := Shell(executable); handled || err != nil {
+		return err
+	}
+	changed, err := Waybar(executable)
+	if err != nil || !changed {
+		return err
+	}
+	return RestartWaybar()
 }
 
 func systemdEscape(path string) string {

@@ -18,7 +18,8 @@ Omabat is a lightweight Linux battery-history daemon and terminal dashboard. Use
 - Battery health, designed capacity, current full capacity, and vendor details
 - Immediate live updates while the dashboard is open
 - Optional background systemd user service
-- Optional Waybar tray battery indicator
+- Battery-history access from Omarchy 4's existing battery widget
+- Optional Waybar tray indicator on older desktops
 - Local SQLite storage with no account or network service
 
 ## Install
@@ -35,7 +36,7 @@ Review [`install.sh`](install.sh) before running it, or download an archive manu
 
 Omabat requires Linux with `/sys/class/power_supply`. For the intended icon rendering, use a terminal configured with a [Nerd Font](https://www.nerdfonts.com/).
 
-UPower, systemd-logind, `powerprofilesctl`, and Waybar are optional integrations. Omabat falls back to sysfs when UPower is unavailable.
+UPower, systemd-logind, `powerprofilesctl`, and the desktop bar are optional integrations. Omabat falls back to sysfs when UPower is unavailable.
 
 ## Start Collecting History
 
@@ -47,7 +48,13 @@ omabat install
 
 This installs and starts `~/.config/systemd/user/omabat.service`. The daemon samples every 120 seconds and records readings immediately before suspend and after resume.
 
-If Waybar has an expandable tray group, `omabat install` adds a dynamic Nerd Font battery icon inside it. Clicking the icon opens Omabat. The existing Waybar configuration is backed up before modification.
+On Omarchy 4, `omabat install` adds a **Battery history** button to the existing battery popup. Middle-clicking the battery icon also opens Omabat. The usual left-click power panel, right-click percentage toggle, and power-profile controls remain available.
+
+The installer uses `omarchy plugin clone omarchy.power` to make a user-owned copy under `~/.config/omarchy/plugins/<username>.power/`, or extends your already enabled power-widget clone. It backs up the original layout and panel as `.omabat.bak` files, preserves widget settings, and does not add a second battery icon. The shell restarts when the panel changes to clear cached QML components. Run the installer inside your Omarchy session so its plugin commands can reach the shell. A disabled power widget is left disabled.
+
+The integration follows the power panel shipped in [Omarchy 4.0.4](https://github.com/omacom/omarchy/releases/tag/v4.0.4). User-owned clones survive system updates; they do not automatically inherit upstream panel changes. Re-running `omabat install` updates Omabat's additions without replacing other customizations. An unfamiliar panel layout is left unchanged with a warning; the collector can still run.
+
+On older desktops without `omarchy-shell`, if Waybar has an expandable tray group, the installer adds a dynamic Nerd Font battery icon inside it. Clicking the icon opens Omabat. The existing Waybar configuration is backed up before modification.
 
 No root privileges are required.
 
@@ -72,7 +79,7 @@ omabat collect              Collect one sample
 omabat collect --daemon     Run the collector daemon directly
 omabat health               Print current health and available hardware details
 omabat demo-data            Create a realistic demo history database
-omabat install              Install and enable the user service
+omabat install              Install the user service and desktop integration
 omabat version              Print the installed version
 ```
 
