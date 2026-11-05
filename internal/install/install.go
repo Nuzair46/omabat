@@ -40,9 +40,6 @@ WantedBy=default.target
 			return fmt.Errorf("systemctl %v: %w", args, err)
 		}
 	}
-	if err := Desktop(executable); err != nil {
-		fmt.Fprintf(os.Stderr, "Desktop integration unavailable: %v\n", err)
-	}
 	fmt.Printf("Installed and started %s\n", path)
 	return nil
 }

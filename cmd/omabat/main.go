@@ -47,10 +47,14 @@ func run(args []string) error {
 			return nil
 		case "demo-data":
 			return demoData(args[1:])
-		case "install":
+		case "install", "integrate":
 			exe, err := os.Executable()
 			if err != nil {
 				return err
+			}
+			if args[0] == "integrate" {
+				fmt.Println("Integrating with the desktop panel; this may modify panel settings and restart the panel.")
+				return install.Desktop(exe)
 			}
 			return install.Service(exe)
 		case "help", "--help", "-h":
@@ -311,5 +315,6 @@ func usage() {
   omabat waybar               Print Waybar daemon status JSON
   omabat version              Print the Omabat version
   omabat demo-data            Create a realistic demo history database
-  omabat install              Install the user service and desktop integration`)
+  omabat install              Install and start the user service only
+  omabat integrate            Integrate with the desktop panel (may restart it)`)
 }
