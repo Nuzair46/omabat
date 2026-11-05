@@ -103,7 +103,8 @@ func TestMaintainAggregatesPrunesSamplesAndKeepsEvents(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if samples != 0 || aggregates == 0 || events == 0 {
+	// One boundary reading is retained to finish cross-hour intervals later.
+	if samples != 1 || aggregates == 0 || events == 0 {
 		t.Fatalf("samples=%d aggregates=%d events=%d", samples, aggregates, events)
 	}
 }

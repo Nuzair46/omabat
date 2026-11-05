@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+const DefaultSampleInterval = 120 * time.Second
+
 type Snapshot struct {
 	DeviceID     string
 	Timestamp    time.Time
@@ -33,6 +35,8 @@ type Snapshot struct {
 	Manufacturer sql.NullString
 	Model        sql.NullString
 	Serial       sql.NullString
+	// SampleInterval is the collector's intended cadence, not the time since the last reading.
+	SampleInterval time.Duration
 }
 
 type Device struct {

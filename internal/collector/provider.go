@@ -42,6 +42,7 @@ func (p CompositeProvider) Snapshot(ctx context.Context) (battery.Snapshot, erro
 type Service struct {
 	Provider Provider
 	Repo     Repository
+	Interval time.Duration
 }
 
 type Repository interface {
@@ -58,6 +59,10 @@ func (s Service) Collect(ctx context.Context) (battery.Snapshot, []battery.Event
 	snap, err := s.Provider.Snapshot(ctx)
 	if err != nil {
 		return battery.Snapshot{}, nil, err
+	}
+	snap.SampleInterval = s.Interval
+	if snap.SampleInterval <= 0 {
+		snap.SampleInterval = battery.DefaultSampleInterval
 	}
 	events, err := s.Repo.RecordSnapshot(ctx, snap)
 	return snap, events, err

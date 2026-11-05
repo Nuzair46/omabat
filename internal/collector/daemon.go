@@ -14,6 +14,7 @@ func (s Service) Run(ctx context.Context, interval time.Duration) error {
 	if interval <= 0 {
 		interval = 120 * time.Second
 	}
+	s.Interval = interval
 	if _, _, err := s.Collect(ctx); err != nil {
 		log.Printf("initial collection failed: %v", err)
 	}
@@ -62,6 +63,7 @@ func (s Service) Run(ctx context.Context, interval time.Duration) error {
 				log.Printf("sleep transition collection failed: %v", err)
 				continue
 			}
+			snap.SampleInterval = interval
 			if sleeping {
 				err = s.Repo.RecordSleep(ctx, snap)
 			} else {
