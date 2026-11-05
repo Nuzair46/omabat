@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -14,7 +15,7 @@ import (
 	"github.com/nuzair46/omabat/internal/battery"
 )
 
-const currentSchema = 3
+const currentSchema = 4
 
 type Repository struct {
 	DB *sql.DB
@@ -43,11 +44,26 @@ func Open(path string) (*Repository, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", path)
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	// These settings must apply to every pooled connection. All explicit
+	// transactions below write, so reserve the writer before reading state.
+	dsn := url.URL{Scheme: "file", Path: abs}
+	if path == ":memory:" {
+		dsn = url.URL{Scheme: "file", Opaque: ":memory:"}
+	}
+	dsn.RawQuery = url.Values{"_pragma": {"busy_timeout=5000"}, "_txlock": {"immediate"}}.Encode()
+	db, err := sql.Open("sqlite", dsn.String())
 	if err != nil {
 		return nil, err
 	}
 	db.SetMaxOpenConns(4)
+	if path == ":memory:" {
+		// A private in-memory database belongs to a single connection.
+		db.SetMaxOpenConns(1)
+	}
 	r := &Repository{DB: db}
 	if err := r.migrate(context.Background()); err != nil {
 		db.Close()
@@ -59,7 +75,7 @@ func Open(path string) (*Repository, error) {
 func (r *Repository) Close() error { return r.DB.Close() }
 
 func (r *Repository) migrate(ctx context.Context) error {
-	if _, err := r.DB.ExecContext(ctx, `PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;`); err != nil {
+	if _, err := r.DB.ExecContext(ctx, `PRAGMA journal_mode=WAL;`); err != nil {
 		return err
 	}
 	if _, err := r.DB.ExecContext(ctx, schema); err != nil {
@@ -99,6 +115,23 @@ func (r *Repository) migrate(ctx context.Context) error {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES(3, unixepoch())`); err != nil {
+			return err
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		version = 3
+	}
+	if version < 4 {
+		tx, err := r.DB.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE battery_samples ADD COLUMN sample_interval_seconds INTEGER NOT NULL DEFAULT 120`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES(4, unixepoch())`); err != nil {
 			return err
 		}
 		if err := tx.Commit(); err != nil {
@@ -152,7 +185,7 @@ func (r *Repository) RecordSnapshot(ctx context.Context, s battery.Snapshot) ([]
 		return nil, err
 	}
 	var previousState string
-	err = tx.QueryRowContext(ctx, `SELECT state FROM battery_samples WHERE device_id=? ORDER BY timestamp DESC LIMIT 1`, s.DeviceID).Scan(&previousState)
+	err = tx.QueryRowContext(ctx, `SELECT state FROM battery_samples WHERE device_id=? ORDER BY timestamp DESC,id DESC LIMIT 1`, s.DeviceID).Scan(&previousState)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
@@ -202,10 +235,10 @@ serial=COALESCE(excluded.serial,serial), technology=COALESCE(excluded.technology
 func insertSnapshot(ctx context.Context, tx *sql.Tx, s battery.Snapshot) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO battery_samples(device_id,timestamp,source,present,state,percentage,
 energy_now,energy_full,energy_design,charge_now,charge_full,charge_design,energy_rate,voltage,current,temperature,
-cycle_count,capacity,time_to_empty,time_to_full,power_profile,ac_online) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+cycle_count,capacity,time_to_empty,time_to_full,power_profile,ac_online,sample_interval_seconds) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		s.DeviceID, s.Timestamp.Unix(), s.Source, s.Present, s.State, s.Percentage,
 		s.EnergyNow, s.EnergyFull, s.EnergyDesign, s.ChargeNow, s.ChargeFull, s.ChargeDesign, s.EnergyRate,
-		s.Voltage, s.Current, s.Temperature, s.CycleCount, s.Capacity, s.TimeToEmpty, s.TimeToFull, s.PowerProfile, s.ACOnline)
+		s.Voltage, s.Current, s.Temperature, s.CycleCount, s.Capacity, s.TimeToEmpty, s.TimeToFull, s.PowerProfile, s.ACOnline, sampleIntervalSeconds(s.SampleInterval))
 	return err
 }
 
@@ -260,17 +293,8 @@ func (r *Repository) Maintain(ctx context.Context, now time.Time) error {
 		return err
 	}
 	defer tx.Rollback()
-	cutoff := now.Add(-10 * 24 * time.Hour).Unix()
-	_, err = tx.ExecContext(ctx, `INSERT INTO hourly_aggregates(device_id,hour,min_percentage,max_percentage,
-avg_discharge_power,peak_discharge_power,charging_seconds,suspend_drain_percentage,avg_health_percentage)
-SELECT device_id,(timestamp/3600)*3600,MIN(percentage),MAX(percentage),
-AVG(CASE WHEN state='discharging' THEN energy_rate END),MAX(CASE WHEN state='discharging' THEN energy_rate END),
-SUM(CASE WHEN state='charging' THEN 120 ELSE 0 END),0,AVG(capacity)
-FROM battery_samples WHERE timestamp < ? GROUP BY device_id,(timestamp/3600)
-ON CONFLICT(device_id,hour) DO UPDATE SET min_percentage=excluded.min_percentage,max_percentage=excluded.max_percentage,
-avg_discharge_power=excluded.avg_discharge_power,peak_discharge_power=excluded.peak_discharge_power,
-charging_seconds=excluded.charging_seconds,avg_health_percentage=excluded.avg_health_percentage`, cutoff)
-	if err != nil {
+	cutoff := now.Add(-10 * 24 * time.Hour).Truncate(time.Hour).Unix()
+	if err := aggregateHours(ctx, tx, cutoff); err != nil {
 		return err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE hourly_aggregates SET suspend_drain_percentage=COALESCE((
@@ -280,7 +304,12 @@ AND e.percentage_delta<0),0) WHERE hour < ?`, cutoff)
 	if err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `DELETE FROM battery_samples WHERE timestamp < ?`, cutoff); err != nil {
+	// Keep one boundary reading per device so an interval crossing the cutoff
+	// can be completed when the following hour is aggregated. Completed hours
+	// are never overwritten, including aggregates written by older versions.
+	if _, err = tx.ExecContext(ctx, `DELETE FROM battery_samples WHERE timestamp < ? AND id != (
+SELECT p.id FROM battery_samples p WHERE p.device_id=battery_samples.device_id AND p.timestamp < ?
+ORDER BY p.timestamp DESC,p.id DESC LIMIT 1)`, cutoff, cutoff); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -289,7 +318,7 @@ AND e.percentage_delta<0),0) WHERE hour < ?`, cutoff)
 func (r *Repository) Latest(ctx context.Context) (battery.Snapshot, error) {
 	row := r.DB.QueryRowContext(ctx, `SELECT device_id,timestamp,source,present,state,percentage,energy_now,energy_full,
 energy_design,charge_now,charge_full,charge_design,energy_rate,voltage,current,temperature,cycle_count,capacity,
-time_to_empty,time_to_full,power_profile,ac_online FROM battery_samples ORDER BY timestamp DESC LIMIT 1`)
+time_to_empty,time_to_full,power_profile,ac_online,sample_interval_seconds FROM battery_samples ORDER BY timestamp DESC,id DESC LIMIT 1`)
 	return scanSnapshot(row)
 }
 
@@ -298,17 +327,19 @@ type scanner interface{ Scan(...any) error }
 func scanSnapshot(row scanner) (battery.Snapshot, error) {
 	var s battery.Snapshot
 	var ts int64
+	var interval int64
 	err := row.Scan(&s.DeviceID, &ts, &s.Source, &s.Present, &s.State, &s.Percentage, &s.EnergyNow, &s.EnergyFull,
 		&s.EnergyDesign, &s.ChargeNow, &s.ChargeFull, &s.ChargeDesign, &s.EnergyRate, &s.Voltage, &s.Current,
-		&s.Temperature, &s.CycleCount, &s.Capacity, &s.TimeToEmpty, &s.TimeToFull, &s.PowerProfile, &s.ACOnline)
+		&s.Temperature, &s.CycleCount, &s.Capacity, &s.TimeToEmpty, &s.TimeToFull, &s.PowerProfile, &s.ACOnline, &interval)
 	s.Timestamp = time.Unix(ts, 0)
+	s.SampleInterval = time.Duration(interval) * time.Second
 	return s, err
 }
 
 func (r *Repository) Samples(ctx context.Context, since time.Time) ([]battery.Snapshot, error) {
 	rows, err := r.DB.QueryContext(ctx, `SELECT device_id,timestamp,source,present,state,percentage,energy_now,energy_full,
 energy_design,charge_now,charge_full,charge_design,energy_rate,voltage,current,temperature,cycle_count,capacity,
-time_to_empty,time_to_full,power_profile,ac_online FROM battery_samples WHERE timestamp>=? ORDER BY timestamp`, since.Unix())
+time_to_empty,time_to_full,power_profile,ac_online,sample_interval_seconds FROM battery_samples WHERE timestamp>=? ORDER BY timestamp,id`, since.Unix())
 	if err != nil {
 		return nil, err
 	}
@@ -354,10 +385,7 @@ FROM battery_devices WHERE id=?`, id).Scan(&d.ID, &d.NativePath, &d.Manufacturer
 }
 
 func (r *Repository) DischargeStats(ctx context.Context, since time.Time) (sql.NullFloat64, sql.NullFloat64, error) {
-	var avg, peak sql.NullFloat64
-	err := r.DB.QueryRowContext(ctx, `SELECT AVG(energy_rate),MAX(energy_rate) FROM battery_samples
-WHERE timestamp>=? AND state='discharging'`, since.Unix()).Scan(&avg, &peak)
-	return avg, peak, err
+	return dischargeStats(ctx, r.DB, since.Unix(), time.Now().Unix())
 }
 
 func (r *Repository) LongTermHealth(ctx context.Context, deviceID string) (sql.NullFloat64, sql.NullFloat64, sql.NullFloat64, error) {
@@ -367,7 +395,10 @@ SELECT avg_health_percentage AS health FROM hourly_aggregates
 WHERE device_id=? AND avg_health_percentage IS NOT NULL
 UNION ALL
 SELECT AVG(capacity) AS health FROM battery_samples
-WHERE device_id=? AND capacity IS NOT NULL GROUP BY timestamp/3600
+WHERE device_id=? AND capacity IS NOT NULL AND NOT EXISTS (
+ SELECT 1 FROM hourly_aggregates a WHERE a.device_id=battery_samples.device_id
+ AND a.hour=(battery_samples.timestamp/3600)*3600
+) GROUP BY timestamp/3600
 )`, deviceID, deviceID).Scan(&avg, &min, &max)
 	return avg, min, max, err
 }

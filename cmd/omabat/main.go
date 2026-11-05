@@ -73,7 +73,7 @@ func run(args []string) error {
 		return err
 	}
 	defer repo.Close()
-	service := collector.Service{Provider: provider(), Repo: repo}
+	service := collector.Service{Provider: provider(), Repo: repo, Interval: tui.LiveInterval}
 	_, err = tea.NewProgram(tui.New(repo, service, duration), tea.WithAltScreen()).Run()
 	return err
 }
@@ -91,7 +91,7 @@ func collect(args []string) error {
 		return err
 	}
 	defer repo.Close()
-	service := collector.Service{Provider: provider(), Repo: repo}
+	service := collector.Service{Provider: provider(), Repo: repo, Interval: *interval}
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 	if *daemon {

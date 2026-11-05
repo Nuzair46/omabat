@@ -100,7 +100,9 @@ All history stays on your machine in:
 ${XDG_DATA_HOME:-~/.local/share}/omabat/omabat.db
 ```
 
-Raw samples are retained for ten days. Hourly aggregates and discrete charging or suspend events are retained for longer-term history.
+The daemon prunes raw samples after ten days, rounding the retention boundary down to a whole hour. One older boundary reading per battery is kept to complete intervals across cleanups. Hourly aggregates and discrete charging or suspend events are retained for longer-term history.
+
+Charging duration and average discharge power are weighted by elapsed time, not sample count, so opening the dashboard does not give its more frequent readings extra weight. Known sleep periods are excluded. Intervals longer than twice the larger of the two adjacent collection cadences are treated as unknown; the last reading is not extrapolated. The cadence is saved with each sample, including custom daemon intervals. Older samples use the default 120-second cadence, and previously stored hourly aggregates are preserved rather than recalculated from incomplete history.
 
 Omabat reads the primary system battery from UPower and sysfs. Hardware fields that the battery does not expose are omitted.
 

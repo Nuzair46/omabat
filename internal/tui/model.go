@@ -50,6 +50,8 @@ type loaded struct {
 
 type liveTick time.Time
 
+const LiveInterval = 3 * time.Second
+
 type collected struct {
 	err error
 }
@@ -170,7 +172,7 @@ func (m Model) collectNow() tea.Cmd {
 }
 
 func liveTickCmd() tea.Cmd {
-	return tea.Tick(3*time.Second, func(at time.Time) tea.Msg {
+	return tea.Tick(LiveInterval, func(at time.Time) tea.Msg {
 		return liveTick(at)
 	})
 }
